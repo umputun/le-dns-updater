@@ -1,6 +1,6 @@
 # le-dns-updater - Update LE certs with DNS challenge
 
-This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update LE certs with DNS challenge. It is intended to be used in a docker container to automate the process of updating LE certs.
+This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update LE certs with DNS challenge. It is intended to be used in a docker container to automate the process of issuing and updating LE certificates.
 
 ## Usage
 
@@ -43,3 +43,4 @@ This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update
 - The container is based on [alpine](https://hub.docker.com/_/alpine/) image
 - Certificates are stored in `/srv/var/certificates` directory inside the container and should be mapped to the host machine
 - Certificates are updated every 10 days
+- Hook command is executed every time certificates are updated, and can be used to copy certificates to the desired location or/and restart other containers
