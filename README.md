@@ -41,6 +41,6 @@ This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update
 ## Technical details
 
 - The container is based on [alpine](https://hub.docker.com/_/alpine/) image
-- Certificates are stored in `/srv/var/certificates` directory inside the container and should be mapped to the host machine
-- Certificates are updated every 10 days
+- Certificates are stored in `/srv/var/certificates` directory inside the container and should be mapped to the host machine or docker volume
+- Certificates are checked and updated every 10 days, if needed
 - Hook command is executed every time certificates are updated, and can be used to copy certificates to the desired location or/and restart other containers

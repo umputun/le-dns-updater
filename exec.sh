@@ -7,7 +7,7 @@ hook="$4"
 
 # only 3 params passed, default no hook
 if [ "$#" -ne 4 ]; then
-   hook="sh -c 'echo no hook defined'"
+   hook="echo 'no hook defined'"
 fi
 
 # split domains by space
