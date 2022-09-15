@@ -40,7 +40,9 @@ This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update
 
 ## Technical details
 
-- The container is based on [alpine](https://hub.docker.com/_/alpine/) image
+- The container is based on [alpine](https://hub.docker.com/_/alpine/) image and available on [docker hub](https://hub.docker.com/r/umputun/le-dns-updater/) (`umputun/le-dns-updater`) as well as on [github](https://github.com/umputun/le-dns-updater/pkgs/container/le-dns-updater) (`ghcr.io/umputun/le-dns-updater`)
+- Stable container is built from the tagged revision and tagged with `:latest` tag
+- Unstable container is built from `master` branch and tagged with `:master` tag
 - Certificates are stored in `/srv/var/certificates` directory inside the container and should be mapped to the host machine or docker volume
 - Certificates are checked and updated every 10 days, if needed
 - Hook command is executed every time certificates are updated, and can be used to copy certificates to the desired location or/and restart other containers
