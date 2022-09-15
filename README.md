@@ -36,6 +36,7 @@ This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update
 ```
 
 - Update compose file with your email, provider, domain(s) and hook command (optional)
+- See the list of supported providers [here](https://github.com/go-acme/lego/tree/master/providers/dns)
 - In case if generated certificates are used by other containers and needed to be relocated, you can use hook command to copy them to the desired location. In the example above, certificates will be copied to `/etc/certificates` directory on the host machine.
 
 ## Technical details
