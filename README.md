@@ -9,7 +9,6 @@ This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update
 ```yaml
 
  le-dns-updater:
-        build: .
         image: umputun/le-dns-updater:master
         container_name: le-dns-updater
         hostname: le-dns-updater
@@ -22,17 +21,16 @@ This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update
               max-file: "5"
         volumes:
             - ./var:/srv/var
-            - /var/run/docker.sock:/var/run/docker.sock:ro
-            - /certificates:/etc/certificates`
-        environment: # all env variables for selected provider. See https://github.com/go-acme/lego#dns-providers for details
+            - /var/run/docker.sock:/var/run/docker.sock:ro # to allow access to nginx container for cert update hook (optional)
+        environment: # all env variables for the selected provider. See https://github.com/go-acme/lego#dns-providers for details
             - "AWS_REGION=eu-west-1"
             - "AWS_ACCESS_KEY_ID=xxxxxxxxxxxxxxxxxxxx"
             - "AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
         command:
             - someuser@example.com # email
             - route53              # provider
-            - "test.example.com test2.example.com" # domains
-            - cp -fv /srv/var/certificates/test.example.com.* /certificates/ # hook command to run on certificate update (optional)
+            - "test.example.com test2.example.com" # domains, separated by space
+            - docker restart nginx # hook command to run on certificate update (optional)
 ```
 
 - Update compose file with your email, provider, domain(s) and hook command (optional)

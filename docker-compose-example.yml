@@ -12,7 +12,6 @@ services:
               max-file: "5"
         volumes:
             - ./var:/srv/var
-            - /var/run/docker.sock:/var/run/docker.sock:ro
         environment: # all env variables for selected provider. See https://github.com/go-acme/lego#dns-providers for details
             - "AWS_REGION=eu-west-1"
             - "AWS_ACCESS_KEY_ID=xxxxxxxxxxxxxxxxxxxx"
