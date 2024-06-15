@@ -26,6 +26,7 @@ This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update
             - "AWS_REGION=eu-west-1"
             - "AWS_ACCESS_KEY_ID=xxxxxxxxxxxxxxxxxxxx"
             - "AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            - "DNS_RESOLVER=1.1.1.1" # optional, use custom DNS resolver
         command:
             - someuser@example.com # email
             - route53              # provider
