@@ -2,61 +2,37 @@ name: build
 
 on:
   push:
-    branches:
-    tags:
+    branches: ["**"]
+    tags: ["**"]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: checkout
-        uses: actions/checkout@v3
-
-      - name: set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v4
 
-      - name: available platforms
-        run: echo ${{ steps.buildx.outputs.platforms }}
-
-      - name: build and deploy master image to ghcr.io and dockerhub
-        if: ${{ github.ref == 'refs/heads/master' }}
-        env:
-          GITHUB_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}
-          DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
-          USERNAME: ${{ github.actor }}
-          GITHUB_SHA: ${{ github.sha}}
-          GITHUB_REF: ${{ github.ref}}
-        run: |
-          ref="$(echo ${GITHUB_REF} | cut -d'/' -f3)"
-          echo GITHUB_REF - $ref
-          echo ${GITHUB_PACKAGE_TOKEN} | docker login ghcr.io -u ${USERNAME} --password-stdin
-          echo ${DOCKER_HUB_TOKEN} | docker login -u ${USERNAME} --password-stdin
-          docker buildx build --push \
-              --build-arg CI=github --build-arg GITHUB_SHA=${GITHUB_SHA} --build-arg GIT_BRANCH=${ref} \
-              --platform linux/amd64,linux/arm/v7,linux/arm64 \
-              -t ghcr.io/${USERNAME}/le-dns-updater:${ref} -t ${USERNAME}/le-dns-updater:${ref} .
-
-      - name: deploy tagged (latest) to ghcr.io and dockerhub
-        if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        env:
-          GITHUB_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}
-          DOCKER_HUB_TOKEN: ${{ secrets.DOCKER_HUB_TOKEN }}
-          USERNAME: ${{ github.actor }}
-          GITHUB_SHA: ${{ github.sha}}
-          GITHUB_REF: ${{ github.ref}}
-        run: |
-          ref="$(echo ${GITHUB_REF} | cut -d'/' -f3)"
-          echo GITHUB_REF - $ref
-          echo ${GITHUB_PACKAGE_TOKEN} | docker login ghcr.io -u ${USERNAME} --password-stdin
-          echo ${DOCKER_HUB_TOKEN} | docker login -u ${USERNAME} --password-stdin
-          docker buildx build --push \
-              --build-arg CI=github --build-arg GITHUB_SHA=${GITHUB_SHA} --build-arg GIT_BRANCH=${ref} \
-              --platform linux/amd64,linux/arm/v7,linux/arm64 \
-              -t ghcr.io/${USERNAME}/le-dns-updater:${ref} -t ghcr.io/${USERNAME}/le-dns-updater:latest \
-              -t ${USERNAME}/le-dns-updater:${ref} -t ${USERNAME}/le-dns-updater:latest .
+      - name: build image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: false
