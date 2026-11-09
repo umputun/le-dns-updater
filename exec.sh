@@ -14,8 +14,8 @@ dns_resolver=${DNS_RESOLVER:-8.8.8.8}
 key_type=${KEY_TYPE:-rsa4096}
 check_interval=${CHECK_INTERVAL:-1d}
 
-# split domains by space
-read -r -a domains <<<"${domain}"
+# split domains by whitespace, including newlines
+read -r -d '' -a domains <<<"${domain}"
 domain_args=()
 for element in "${domains[@]}"; do
     domain_args+=(-d "${element}")
@@ -29,21 +29,42 @@ fi
 
 lego_args=(-k "${key_type}" --email="${email}" "${domain_args[@]}" --dns="${provider}" --dns.resolvers="${dns_resolver}" --path=/srv/var)
 
-# lego names certificate files after the first domain, with * replaced by _ and : by -
+# lego names certificate files after the first domain, with * replaced by _, : by - and non-ASCII converted to punycode
 cert_name=${domains[0]//\*/_}
-cert_file="/srv/var/certificates/${cert_name//:/-}.crt"
+cert_name=${cert_name//:/-}
+if [[ ${cert_name} == *[![:ascii:]]* ]]; then
+    cert_name=$(idn2 "${cert_name}" || echo "${cert_name}")
+fi
+cert_file="/srv/var/certificates/${cert_name}.crt"
 
-echo "activate le-dns-updater for ${domain}, hook: ${hook}, formatted domain(s): ${domain_args[*]}, provider: ${provider}, dns resolver: ${dns_resolver}, key type: ${key_type}, profile: ${LE_PROFILE:-default}, check interval: ${check_interval}"
+# lego keeps accounts per ACME server and email, renew fails if there is none for the current ones
+server=${LEGO_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+server_host=${server#*://}
+server_host=${server_host%%/*}
+account_file="/srv/var/accounts/${server_host//:/_}/${email:-noemail@example.com}/account.json"
 
-# issue certificate if there is none yet, otherwise renew it when due
+echo "activate le-dns-updater for ${domains[*]}, hook: ${hook}, formatted domain(s): ${domain_args[*]}, provider: ${provider}, dns resolver: ${dns_resolver}, key type: ${key_type}, profile: ${LE_PROFILE:-default}, check interval: ${check_interval}"
+
+issue_cert() {
+    lego "${lego_args[@]}" --accept-tos run "${profile_args[@]}" --run-hook="${hook}"
+}
+
+# issue certificate if there is none yet or no account for the current email and server, otherwise renew it when due
 update_cert() {
     if [ ! -f "${cert_file}" ]; then
-        echo "$(date) issue certificate for ${domain}"
-        lego "${lego_args[@]}" --accept-tos run "${profile_args[@]}" --run-hook="${hook}"
-        return
+        echo "$(date) issue certificate for ${domains[*]}"
+        issue_cert
+    elif [ ! -f "${account_file}" ]; then
+        echo "$(date) no account for ${email} at ${server_host}, issue certificate for ${domains[*]}"
+        issue_cert
+    else
+        echo "$(date) check certificate for ${domains[*]}"
+        lego "${lego_args[@]}" renew --dynamic "${profile_args[@]}" --renew-hook="${hook}"
     fi
-    echo "$(date) check certificate for ${domain}"
-    lego "${lego_args[@]}" renew --dynamic "${profile_args[@]}" --renew-hook="${hook}"
+    rc=$?
+    if [ "${rc}" -ne 0 ]; then
+        echo "$(date) ERROR: failed to update certificate for ${domains[*]}, lego exit code ${rc}, next attempt in ${check_interval}"
+    fi
 }
 
 update_cert
