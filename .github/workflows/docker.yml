@@ -26,17 +26,20 @@ jobs:
         id: ref
         env:
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ github.repository }}
         run: |
           owner="${OWNER,,}"
           echo "ghcr_image=ghcr.io/${owner}/le-dns-updater" >> "$GITHUB_OUTPUT"
           echo "hub_image=docker.io/${owner}/le-dns-updater" >> "$GITHUB_OUTPUT"
-          remote_tags=$(git ls-remote --tags --refs "https://github.com/${REPO}.git")
+          # workflow_run doesn't say whether head_branch is a branch or a tag, so a release is a tag
+          # of that name pointing at the built commit (an annotated tag is listed with its commit as ^{})
+          tag_commits=$(git ls-remote --tags "https://github.com/${REPO}.git" "refs/tags/${HEAD_BRANCH}" "refs/tags/${HEAD_BRANCH}^{}" | awk '{print $1}')
           if [ "$HEAD_BRANCH" = "master" ]; then
             echo "tag=master" >> "$GITHUB_OUTPUT"
             echo "latest=false" >> "$GITHUB_OUTPUT"
-          elif awk '{print $2}' <<<"$remote_tags" | grep -qxF "refs/tags/${HEAD_BRANCH}"; then
+          elif [ -n "$HEAD_SHA" ] && grep -qxF "$HEAD_SHA" <<<"$tag_commits"; then
             echo "tag=${HEAD_BRANCH}" >> "$GITHUB_OUTPUT"
             echo "latest=true" >> "$GITHUB_OUTPUT"
           else

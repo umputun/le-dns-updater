@@ -14,8 +14,8 @@ dns_resolver=${DNS_RESOLVER:-8.8.8.8}
 key_type=${KEY_TYPE:-rsa4096}
 check_interval=${CHECK_INTERVAL:-1d}
 
-# split domains by whitespace, including newlines
-read -r -d '' -a domains <<<"${domain}"
+# split domains by whitespace, including newlines, lowercased so lego and the certificate file name below agree
+read -r -d '' -a domains <<<"${domain,,}"
 domain_args=()
 for element in "${domains[@]}"; do
     domain_args+=(-d "${element}")
@@ -36,6 +36,7 @@ if [[ ${cert_name} == *[![:ascii:]]* ]]; then
     cert_name=$(idn2 "${cert_name}" || echo "${cert_name}")
 fi
 cert_file="/srv/var/certificates/${cert_name}.crt"
+cert_json="/srv/var/certificates/${cert_name}.json"
 
 # lego keeps accounts per ACME server and email, renew fails if there is none for the current ones
 server=${LEGO_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
@@ -56,6 +57,10 @@ update_cert() {
         issue_cert
     elif [ ! -f "${account_file}" ]; then
         echo "$(date) no account for ${email} at ${server_host}, issue certificate for ${domains[*]}"
+        issue_cert
+    elif cert_host=$(sed -n 's|.*"certUrl": *"[a-z]*://\([^/"]*\).*|\1|p' "${cert_json}" 2>/dev/null) &&
+        [ -n "${cert_host}" ] && [ "${cert_host}" != "${server_host}" ]; then
+        echo "$(date) certificate for ${domains[*]} was issued by ${cert_host}, issue a new one from ${server_host}"
         issue_cert
     else
         echo "$(date) check certificate for ${domains[*]}"
