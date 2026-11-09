@@ -11,24 +11,45 @@ if [ "$#" -ne 4 ]; then
 fi
 
 dns_resolver=${DNS_RESOLVER:-8.8.8.8}
+key_type=${KEY_TYPE:-rsa4096}
+check_interval=${CHECK_INTERVAL:-1d}
 
 # split domains by space
-array=($domain)
-fmt_domain=""
-for element in "${array[@]}"
-do
-    fmt_domain+="-d ${element} "
+read -r -a domains <<<"${domain}"
+domain_args=()
+for element in "${domains[@]}"; do
+    domain_args+=(-d "${element}")
 done
-echo "activate le-dns-updater for ${domain}, hook: ${hook}, formatted domain(s): ${fmt_domain}, provider: ${provider}, dns resolver: ${dns_resolver}"
 
-# issue certificate for domain
-echo "$(date) issue certificate for ${domain}"
-lego -k rsa4096 --email="${email}" ${fmt_domain} --dns="${provider}" --dns.resolvers="${dns_resolver}" --path=/srv/var --accept-tos run --run-hook="${hook}"
+# optional ACME profile, e.g. shortlived or tlsserver
+profile_args=()
+if [ -n "${LE_PROFILE}" ]; then
+    profile_args=(--profile="${LE_PROFILE}")
+fi
 
+lego_args=(-k "${key_type}" --email="${email}" "${domain_args[@]}" --dns="${provider}" --dns.resolvers="${dns_resolver}" --path=/srv/var)
+
+# lego names certificate files after the first domain, with * replaced by _ and : by -
+cert_name=${domains[0]//\*/_}
+cert_file="/srv/var/certificates/${cert_name//:/-}.crt"
+
+echo "activate le-dns-updater for ${domain}, hook: ${hook}, formatted domain(s): ${domain_args[*]}, provider: ${provider}, dns resolver: ${dns_resolver}, key type: ${key_type}, profile: ${LE_PROFILE:-default}, check interval: ${check_interval}"
+
+# issue certificate if there is none yet, otherwise renew it when due
+update_cert() {
+    if [ ! -f "${cert_file}" ]; then
+        echo "$(date) issue certificate for ${domain}"
+        lego "${lego_args[@]}" --accept-tos run "${profile_args[@]}" --run-hook="${hook}"
+        return
+    fi
+    echo "$(date) check certificate for ${domain}"
+    lego "${lego_args[@]}" renew --dynamic "${profile_args[@]}" --renew-hook="${hook}"
+}
+
+update_cert
 while :
 do
-    echo "$(date) renewal attempt in 10 days"
-    sleep 10d
-    echo "$(date) update certificate for ${domain}"
-    lego -k rsa4096 --email="${email}" ${fmt_domain} --dns="${provider}" --dns.resolvers="${dns_resolver}" --path=/srv/var renew --renew-hook="${hook}"
+    echo "$(date) next check in ${check_interval}"
+    sleep "${check_interval}"
+    update_cert
 done

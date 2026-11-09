@@ -27,6 +27,9 @@ This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update
             - "AWS_ACCESS_KEY_ID=xxxxxxxxxxxxxxxxxxxx"
             - "AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             - "DNS_RESOLVER=1.1.1.1" # optional, use custom DNS resolver
+            - "LE_PROFILE=shortlived" # optional, ACME profile, e.g. shortlived or tlsserver
+            - "KEY_TYPE=ec256" # optional, key type, default rsa4096
+            - "CHECK_INTERVAL=12h" # optional, how often to check certificates, default 1d
         command:
             - someuser@example.com # email
             - route53              # provider
@@ -44,5 +47,9 @@ This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update
 - Stable container is built from the tagged revision and tagged with `:latest` tag
 - Unstable container is built from `master` branch and tagged with `:master` tag
 - Certificates are stored in `/srv/var/certificates` directory inside the container and should be mapped to the host machine or docker volume
-- Certificates are checked and updated every 10 days, if needed
-- Hook command is executed every time certificates are updated, and can be used to copy certificates to the desired location or/and restart other containers
+- Certificate is issued on the first start only, when there is no certificate for the first domain in `/srv/var/certificates` yet. Restarting the container doesn't issue a new one
+- Certificates are checked daily (`CHECK_INTERVAL`) and renewed when the ACME server's renewal info (ARI) says so or when 1/3 of the lifetime is left (1/2 for short-lived certificates), whichever comes first
+- `LE_PROFILE` selects the ACME profile, see [Let's Encrypt profiles](https://letsencrypt.org/docs/profiles/). A changed profile applies from the next renewal
+- Changes to the domain list are not applied on restart, added domains are picked up at the next renewal. To apply a new domain list immediately, remove the certificate files of the first domain from `/srv/var/certificates` and restart the container
+- To test against Let's Encrypt staging, set `LEGO_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory`
+- Hook command is executed every time certificates are issued or renewed (not on every container start), and can be used to copy certificates to the desired location or/and restart other containers
