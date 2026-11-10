@@ -64,7 +64,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - name: checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
@@ -85,10 +85,6 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          build-args: |
-            CI=github
-            GITHUB_SHA=${{ github.event.workflow_run.head_sha }}
-            GIT_BRANCH=${{ needs.prepare.outputs.tag }}
           outputs: type=image,name=${{ needs.prepare.outputs.ghcr_image }},push-by-digest=true,name-canonical=true,push=true
 
       - name: export digest

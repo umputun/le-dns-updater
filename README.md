@@ -27,8 +27,8 @@ This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update
             - "AWS_ACCESS_KEY_ID=xxxxxxxxxxxxxxxxxxxx"
             - "AWS_SECRET_ACCESS_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
             - "DNS_RESOLVER=1.1.1.1" # optional, use custom DNS resolver
-            - "LE_PROFILE=shortlived" # optional, ACME profile, e.g. shortlived or tlsserver
-            - "KEY_TYPE=ec256" # optional, key type, default rsa4096
+            # - "LE_PROFILE=shortlived" # optional, ACME profile, e.g. shortlived or tlsserver
+            # - "KEY_TYPE=ec256" # optional, key type, default rsa4096
             - "CHECK_INTERVAL=12h" # optional, how often to check certificates, default 1d
         command:
             - someuser@example.com # email
