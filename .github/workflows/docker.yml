@@ -1,0 +1,168 @@
+name: docker
+
+on:
+  workflow_run:
+    workflows: [build]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  # publish after a successful build of a push to this repository:
+  # master as :master, tags as :<tag> and :latest
+  prepare:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ref.outputs.tag }}
+      latest: ${{ steps.ref.outputs.latest }}
+      ghcr_image: ${{ steps.ref.outputs.ghcr_image }}
+      hub_image: ${{ steps.ref.outputs.hub_image }}
+    steps:
+      - name: resolve image names and tag
+        id: ref
+        env:
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
+        run: |
+          owner="${OWNER,,}"
+          echo "ghcr_image=ghcr.io/${owner}/le-dns-updater" >> "$GITHUB_OUTPUT"
+          echo "hub_image=docker.io/${owner}/le-dns-updater" >> "$GITHUB_OUTPUT"
+          # workflow_run doesn't say whether head_branch is a branch or a tag, so a release is a tag
+          # of that name pointing at the built commit (an annotated tag is listed with its commit as ^{})
+          tag_commits=$(git ls-remote --tags "https://github.com/${REPO}.git" "refs/tags/${HEAD_BRANCH}" "refs/tags/${HEAD_BRANCH}^{}" | awk '{print $1}')
+          if [ "$HEAD_BRANCH" = "master" ]; then
+            echo "tag=master" >> "$GITHUB_OUTPUT"
+            echo "latest=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$HEAD_SHA" ] && grep -qxF "$HEAD_SHA" <<<"$tag_commits"; then
+            echo "tag=${HEAD_BRANCH}" >> "$GITHUB_OUTPUT"
+            echo "latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "${HEAD_BRANCH} is neither master nor a tag, nothing to publish"
+          fi
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.tag != ''
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+            artifact: linux-amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            artifact: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+
+      - name: set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: login to ghcr.io
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.PKG_TOKEN }}
+
+      - name: build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ needs.prepare.outputs.ghcr_image }},push-by-digest=true,name-canonical=true,push=true
+
+      - name: export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.artifact }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # one multi-arch manifest from the same digests, to ghcr.io and Docker Hub
+  merge:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: download digests
+        uses: actions/download-artifact@v8
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: verify all digests present
+        run: |
+          expected=2
+          actual=$(find /tmp/digests -maxdepth 1 -type f | wc -l)
+          if [ "$actual" -ne "$expected" ]; then
+            echo "expected $expected digests, found $actual"
+            ls -la /tmp/digests
+            exit 1
+          fi
+
+      - name: set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: login to ghcr.io
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.PKG_TOKEN }}
+
+      - name: login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: create manifest and push
+        working-directory: /tmp/digests
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          LATEST: ${{ needs.prepare.outputs.latest }}
+          GHCR_IMAGE: ${{ needs.prepare.outputs.ghcr_image }}
+          HUB_IMAGE: ${{ needs.prepare.outputs.hub_image }}
+        run: |
+          tags=(-t "${GHCR_IMAGE}:${TAG}" -t "${HUB_IMAGE}:${TAG}")
+          if [ "$LATEST" = "true" ]; then
+            tags+=(-t "${GHCR_IMAGE}:latest" -t "${HUB_IMAGE}:latest")
+          fi
+          sources=()
+          for digest in *; do
+            sources+=("${GHCR_IMAGE}@sha256:${digest}")
+          done
+          docker buildx imagetools create "${tags[@]}" "${sources[@]}"
+
+      - name: inspect image
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          GHCR_IMAGE: ${{ needs.prepare.outputs.ghcr_image }}
+          HUB_IMAGE: ${{ needs.prepare.outputs.hub_image }}
+        run: |
+          docker buildx imagetools inspect "${GHCR_IMAGE}:${TAG}"
+          docker buildx imagetools inspect "${HUB_IMAGE}:${TAG}"
