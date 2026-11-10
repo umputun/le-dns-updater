@@ -14,6 +14,13 @@ dns_resolver=${DNS_RESOLVER:-8.8.8.8}
 key_type=${KEY_TYPE:-rsa4096}
 check_interval=${CHECK_INTERVAL:-1d}
 
+# sleep takes a number with an optional s, m, h or d suffix. Reject anything else and zero before calling lego,
+# otherwise sleep returns at once and the loop below calls lego back to back
+if [[ ! ${check_interval} =~ ^[0-9]+(\.[0-9]+)?[smhd]?$ ]] || [[ ${check_interval%[smhd]} =~ ^0*\.?0*$ ]]; then
+    echo "ERROR: invalid CHECK_INTERVAL '${check_interval}', expected a positive number with an optional s, m, h or d suffix, e.g. 12h"
+    exit 1
+fi
+
 # split domains by whitespace, including newlines, lowercased so lego and the certificate file name below agree
 read -r -d '' -a domains <<<"${domain,,}"
 domain_args=()
@@ -76,6 +83,6 @@ update_cert
 while :
 do
     echo "$(date) next check in ${check_interval}"
-    sleep "${check_interval}"
+    sleep "${check_interval}" || exit 1
     update_cert
 done

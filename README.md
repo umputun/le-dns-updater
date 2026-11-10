@@ -49,7 +49,7 @@ This is a simple tool wrapping [lego](https://github.com/go-acme/lego) to update
 - Certificates are stored in `/srv/var/certificates` directory inside the container and should be mapped to the host machine or docker volume
 - Certificate is issued on the first start only, when there is no certificate for the first domain in `/srv/var/certificates` yet, or when there is no ACME account for the current email and server (changing the email or `LEGO_SERVER` issues a new certificate). Restarting the container doesn't issue a new one
 - If issuing or renewing fails, an `ERROR:` line is logged and the next attempt happens after `CHECK_INTERVAL`
-- Certificates are checked daily (`CHECK_INTERVAL`) and renewed when the ACME server's renewal info (ARI) says so or when 1/3 of the lifetime is left (1/2 for short-lived certificates), whichever comes first
+- Certificates are checked daily (`CHECK_INTERVAL`, a number with an optional `s`, `m`, `h` or `d` suffix; an invalid value stops the container with an error) and renewed when the ACME server's renewal info (ARI) says so or when 1/3 of the lifetime is left (1/2 for short-lived certificates), whichever comes first
 - `LE_PROFILE` selects the ACME profile, see [Let's Encrypt profiles](https://letsencrypt.org/docs/profiles/). A changed profile applies from the next renewal
 - Changes to the domain list are not applied on restart, added domains are picked up at the next renewal. To apply a new domain list immediately, remove the certificate files of the first domain from `/srv/var/certificates` and restart the container
 - To test against Let's Encrypt staging, set `LEGO_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory`
