@@ -32,9 +32,9 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ github.repository }}
         run: |
-          owner="${OWNER,,}"
-          echo "ghcr_image=ghcr.io/${owner}/le-dns-updater" >> "$GITHUB_OUTPUT"
-          echo "hub_image=docker.io/${owner}/le-dns-updater" >> "$GITHUB_OUTPUT"
+          owner_lc="${OWNER,,}"
+          echo "ghcr_image=ghcr.io/${owner_lc}/le-dns-updater" >> "$GITHUB_OUTPUT"
+          echo "hub_image=docker.io/${owner_lc}/le-dns-updater" >> "$GITHUB_OUTPUT"
           # workflow_run doesn't say whether head_branch is a branch or a tag, so a release is a tag
           # of that name pointing at the built commit (an annotated tag is listed with its commit as ^{})
           tag_commits=$(git ls-remote --tags "https://github.com/${REPO}.git" "refs/tags/${HEAD_BRANCH}" "refs/tags/${HEAD_BRANCH}^{}" | awk '{print $1}')
