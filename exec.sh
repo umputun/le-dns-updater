@@ -60,6 +60,11 @@ server_host=${server#*://}
 server_host=${server_host%%/*}
 account_file="/srv/var/accounts/${server_host//:/_}/${email:-noemail@example.com}/account.json"
 
+# the ACME server and email the certificate on disk was issued under. renew uses the current account, and the server
+# refuses to replace a certificate issued under another one, so a certificate from another account gets a new one
+account_record="/srv/var/certificates/${cert_name}.account"
+account="${server} ${email:-noemail@example.com}"
+
 echo "activate le-dns-updater for ${domains[*]}, hook: ${hook}, formatted domain(s): ${domain_args[*]}, provider: ${provider}, dns resolver: ${dns_resolver}, key type: ${key_type}, profile: ${LE_PROFILE:-default}, check interval: ${check_interval}"
 
 # requested names and the DNS names of the existing certificate, sorted and one per line, so the order doesn't matter
@@ -69,17 +74,37 @@ cert_names() {
         sed -n 's/^ *DNS://p' | tr '[:upper:]' '[:lower:]' | sort -u
 }
 
-issue_cert() {
-    lego "${lego_args[@]}" --accept-tos run "${profile_args[@]}" --run-hook="${hook}"
+cert_sum() {
+    sha256sum "${cert_file}" 2>/dev/null | cut -d ' ' -f 1
 }
 
-# issue certificate if there is none yet or no account for the current email and server, otherwise renew it when due
+# record the account when lego has saved a new certificate file, whatever its exit code: run saves the certificate
+# before calling the hook, so a failed hook still leaves a certificate issued under the current account
+issue_cert() {
+    local before after rc
+    before=$(cert_sum)
+    lego "${lego_args[@]}" --accept-tos run "${profile_args[@]}" --run-hook="${hook}"
+    rc=$?
+    after=$(cert_sum)
+    if [ -n "${after}" ] && [ "${after}" != "${before}" ]; then
+        if ! { printf '%s\n' "${account}" >"${account_record}.tmp" && mv "${account_record}.tmp" "${account_record}"; }; then
+            echo "$(date) ERROR: can't write ${account_record}"
+        fi
+    fi
+    return "${rc}"
+}
+
+# issue certificate if there is none yet, no account for the current email and server, or the certificate was issued
+# under another account, server or names, otherwise renew it when due
 update_cert() {
     if [ ! -f "${cert_file}" ]; then
         echo "$(date) issue certificate for ${domains[*]}"
         issue_cert
     elif [ ! -f "${account_file}" ]; then
         echo "$(date) no account for ${email} at ${server_host}, issue certificate for ${domains[*]}"
+        issue_cert
+    elif ! recorded=$(cat "${account_record}" 2>/dev/null) || [ "${recorded}" != "${account}" ]; then
+        echo "$(date) certificate for ${domains[*]} was issued under ${recorded:-an unrecorded account}, issue a new one under ${account}"
         issue_cert
     elif cert_host=$(sed -n 's|.*"certUrl": *"[a-z]*://\([^/"]*\).*|\1|p' "${cert_json}" 2>/dev/null) &&
         [ -n "${cert_host}" ] && [ "${cert_host}" != "${server_host}" ]; then

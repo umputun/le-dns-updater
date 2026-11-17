@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: resolve image names and tag
         id: ref
+        # bash -eo pipefail, so a failed git ls-remote fails the step instead of skipping the release
+        shell: bash
         env:
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
